@@ -1,6 +1,84 @@
-sudo apt-get update
+git config --global user.name "ed"
+git config --global user.email "ed.s.sharood@gmail.com"
+sudo apt update && sudo apt upgrade -y
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo npm install -g n8n
+sudo apt install qbittorrent-nox -y
+
 sudo apt-get install sshfs
 sudo apt-get install sshpass
+sudo apt install vlc -y
+#sudo apt install mpv -y
+#sudo apt install celluloid -y
+sudo apt install kodi -y
+
+
+
 chmod +x configure_pi.sh
 sudo mkdir /mnt/movies
 sudo mkdir /mnt/complete
+sudo mkdir /mnt/incomplete
+sudo mkdir /mnt/raspberry-drive
+
+
+sudo apt install qbittorrent-nox -y
+
+
+cat <<EOF | sudo tee /etc/systemd/system/n8n.service
+[Unit]
+Description=n8n workflow automation tool
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/n8n
+Restart=always
+User=pi
+Environment=PATH=/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+Environment=N8N_SECURE_COOKIE=false
+Environment=N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+Environment=N8N_RUNNERS_ENABLED=true
+WorkingDirectory=/home/pi
+
+[Install]
+WantedBy=multi-user.target
+EOF'
+
+sudo bash -c 'cat > /etc/systemd/system/qbittorrent-nox.service <<EOF
+[Unit]
+Description=qBittorrent-nox (Headless Torrent Client)
+After=network.target
+
+[Service]
+User=pi
+Group=pi
+ExecStart=/usr/bin/qbittorrent-nox --webui-port=8080
+Restart=on-failure
+LimitNOFILE=65536
+ExecStop=/usr/bin/pkill -f qbittorrent-nox
+
+[Install]
+WantedBy=multi-user.target
+EOF'
+
+
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable qbittorrent-nox
+sudo systemctl start qbittorrent-nox
+
+sudo systemctl enable n8n
+sudo systemctl start n8n
+
+sudo systemctl restart qbittorrent-nox
+
+
+
+
+
+node -v
+npm -v
+n8n -v
+
