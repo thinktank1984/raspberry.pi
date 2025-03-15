@@ -93,6 +93,16 @@ newgrp docker
 docker pull lscr.io/linuxserver/firefox
 mkdir -p ~/firefox-config
 
+docker run -d \
+  --name=firefox \
+  --security-opt seccomp=unconfined \
+  -p 3011:3011 \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=Europe/London \
+  -v ~/firefox-config:/config \
+  --shm-size=256m \
+  lscr.io/linuxserver/firefox
 
 node -v
 npm -v
