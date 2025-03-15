@@ -17,6 +17,7 @@ sudo apt install kodi -y
 
 chmod +x configure_pi.sh
 chmod +x run_firefox_docker
+chmod +x stop_firefox_docker
 sudo mkdir /mnt/movies
 sudo mkdir /mnt/complete
 sudo mkdir /mnt/incomplete
