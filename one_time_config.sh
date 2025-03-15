@@ -16,6 +16,7 @@ sudo apt install kodi -y
 
 
 chmod +x configure_pi.sh
+chmod +x run_firefox_docker
 sudo mkdir /mnt/movies
 sudo mkdir /mnt/complete
 sudo mkdir /mnt/incomplete
@@ -75,10 +76,26 @@ sudo systemctl start n8n
 sudo systemctl restart qbittorrent-nox
 
 
+# Install Docker
+sudo apt install -y docker.io
 
+# Start Docker and enable at boot
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to the Docker group to avoid using sudo
+sudo usermod -aG docker $USER
+
+# Log out and log back in for group changes to take effect
+# (Or run the command below to apply changes to current session)
+newgrp docker
+
+docker pull lscr.io/linuxserver/firefox
+mkdir -p ~/firefox-config
 
 
 node -v
 npm -v
 n8n -v
+docker --version
 
