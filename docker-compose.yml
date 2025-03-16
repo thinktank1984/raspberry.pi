@@ -1,0 +1,35 @@
+services:
+  n8n:
+    image: n8nio/n8n
+    container_name: home_server_n8n
+    restart: always
+    ports:
+      - "5678:5678"  # n8n UI
+    environment:
+      - NODE_ENV=production
+      - N8N_RUNNERS_ENABLED=true
+
+  qbittorrent:
+    build: .
+    container_name: home_server_qbittorrent
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "8080:8080"  # qBittorrent Web UI
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - WEBUI_PORT=8080
+
+  firefox:
+    image: lscr.io/linuxserver/firefox
+    container_name: home_server_firefox
+    restart: unless-stopped
+    ports:
+      - "3011:3000"  # Firefox Remote UI
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+

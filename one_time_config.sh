@@ -91,6 +91,7 @@ sudo usermod -aG docker $USER
 # (Or run the command below to apply changes to current session)
 newgrp docker
 
+docker pull n8nio/n8n
 docker pull lscr.io/linuxserver/firefox
 mkdir -p ~/firefox-config
 
@@ -105,6 +106,11 @@ docker run -d \
   --shm-size=256m \
   lscr.io/linuxserver/firefox
 
+docker run -it --rm \
+  -p 5678:5678 \
+  -v ~/.n8n:/home/node/.n8n \
+  n8nio/n8n
+  
 node -v
 npm -v
 n8n -v
