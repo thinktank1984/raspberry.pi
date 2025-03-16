@@ -1,0 +1,27 @@
+FROM lscr.io/linuxserver/qbittorrent
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV WINDOWS_USER=edsharood
+ENV MOVIES_PATH="D:/sandbox/movies"
+ENV COMPLETE_PATH="D:/docker-folder/complete"
+ENV INCOMPLETE_PATH="D:/sandbox/incomplete"
+ENV RASPBERRY_DRIVE_PATH="D:/sandbox/raspberry-drive"
+ENV MOUNT_MOVIES=/mnt/movies
+ENV MOUNT_COMPLETE=/mnt/complete
+ENV MOUNT_INCOMPLETE=/mnt/incomplete
+ENV MOUNT_RASPBERRY_DRIVE=/mnt/raspberry-drive
+
+# Install required packages
+RUN apk update && apk add --no-cache cifs-utils qbittorrent-nox sshfs sshpass
+
+# Create mount point directories
+RUN mkdir -p $MOUNT_MOVIES $MOUNT_COMPLETE $MOUNT_INCOMPLETE $MOUNT_RASPBERRY_DRIVE
+
+# Mount the shares and run qbittorrent-nox in the foreground
+CMD sh -c "\
+  mount -t cifs //192.168.178.100/movies ${MOUNT_MOVIES} -o username=${WINDOWS_USER},password=As-12345699 && \
+  mount -t cifs //192.168.178.100/complete ${MOUNT_COMPLETE} -o username=${WINDOWS_USER},password=As-12345699 && \
+  mount -t cifs //192.168.178.100/incomplete ${MOUNT_INCOMPLETE} -o username=${WINDOWS_USER},password=As-12345699 && \
+  mount -t cifs //192.168.178.100/raspberry-drive ${MOUNT_RASPBERRY_DRIVE} -o username=${WINDOWS_USER},password=As-12345699 && \
+  exec qbittorrent-nox --confirm-legal-notice"

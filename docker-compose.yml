@@ -10,7 +10,7 @@ services:
       - N8N_RUNNERS_ENABLED=true
 
   qbittorrent:
-    build: .
+    image: lscr.io/linuxserver/qbittorrent
     container_name: home_server_qbittorrent
     restart: unless-stopped
     privileged: true
