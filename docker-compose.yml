@@ -8,6 +8,8 @@ services:
     environment:
       - NODE_ENV=production
       - N8N_RUNNERS_ENABLED=true
+      - N8N_PROTOCOL=http  # Use http protocol if you're not using HTTPS
+      - N8N_SECURE_COOKIE=false  # Disable secure cookies
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent
