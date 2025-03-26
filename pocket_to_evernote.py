@@ -172,17 +172,23 @@ def create_note_from_article(note_store, article, notebook_guid):
         print(f"Error creating note: {str(e)}")
         return None
 
-def sync_pocket_to_evernote(config):
-    """Sync Pocket articles to Evernote."""
-    # Fetch articles from Pocket
-    articles = fetch_pocket_articles(
-        consumer_key=config['pocket']['consumer_key'],
-        access_token=config['pocket']['access_token'],
-        hours_lookback=config['pocket']['hours_lookback']
-    )
+def sync_pocket_to_evernote(config, articles=None):
+    """Sync Pocket articles to Evernote.
+    
+    Args:
+        config: Evernote configuration dictionary
+        articles: Optional list of pocket articles. If None, will fetch from Pocket API.
+    """
+    # Fetch articles from Pocket if not provided
+    if articles is None:
+        articles = fetch_pocket_articles(
+            consumer_key=config['pocket']['consumer_key'],
+            access_token=config['pocket']['access_token'],
+            hours_lookback=config['pocket']['hours_lookback']
+        )
     
     if not articles:
-        print("No articles found in Pocket.")
+        print("No articles found to sync to Evernote.")
         return
     
     # Connect to Evernote
