@@ -29,8 +29,8 @@ def load_config(config_path="evernote_config.json"):
                 "notebook_name": "Pocket Articles",
                 "sandbox": False,  # Set to True for development/testing
                 "pocket": {
-                    "consumer_key": "114205-4f640a16a3fd75d1b69798d",
-                    "access_token": "0c67ad2b-95d3-a656-d9bd-eb08b7",
+                    "consumer_key": "your-pocket-consumer-key",
+                    "access_token": "your-pocket-access-token",
                     "hours_lookback": 24
                 }
             }

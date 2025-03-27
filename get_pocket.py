@@ -1,159 +1,207 @@
+#get_pocket.py do not change do not remove
 import json
 import logging
-import time
-import requests
+import os
+import sys
+import argparse
 from datetime import datetime, timedelta
-from pocket import Pocket, PocketException
-from bs4 import BeautifulSoup
+import requests
 
-def get_full_content(url):
-    """Extract the full content from a URL based on its type."""
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("get_pocket")
+
+def load_config(config_path="pipeline_config.json"):
+    """Load configuration from JSON file."""
     try:
-        if 'youtube.com' in url or 'youtu.be' in url:
-            return get_youtube_content(url)
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                return json.load(f)
         else:
-            return get_article_content(url)
+            logger.error(f"Config file not found: {config_path}")
+            return None
     except Exception as e:
-        logging.error(f"Error extracting content from {url}: {str(e)}")
-        return {"type": "error", "message": f"Content extraction failed: {str(e)}"}
-
-def get_youtube_content(url):
-    """For YouTube videos, just return basic info without scraping."""
-    try:
-        # Extract video ID from URL
-        video_id = None
-        if 'v=' in url:
-            video_id = url.split('v=')[1].split('&')[0]
-        elif 'youtu.be/' in url:
-            video_id = url.split('youtu.be/')[1].split('?')[0]
-        
-        if not video_id:
-            return {"type": "error", "message": "Could not extract YouTube video ID"}
-        
-        # Format as JSON-friendly data structure
-        return {
-            "type": "youtube",
-            "video_id": video_id,
-            "url": url
-        }
-    except Exception as e:
-        return {"type": "error", "message": f"YouTube parsing error: {str(e)}"}
-
-def get_article_content(url):
-    """Extract the full content from a regular article URL."""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Remove script and style elements
-        for script_or_style in soup(['script', 'style']):
-            script_or_style.decompose()
-        
-        # Try to find the main article content
-        article_content = None
-        
-        # Try to find article by common article tags
-        for selector in ['article', 'main', '.article', '.post-content', '.entry-content', '#content', '.content']:
-            if article_content:
-                break
-            article_content = soup.select_one(selector)
-        
-        # If no article container found, use the body
-        if not article_content:
-            article_content = soup.body
-        
-        # Get text and clean it up
-        text = article_content.get_text(separator='\n')
-        
-        # Clean up empty lines and excessive whitespace
-        lines = [line.strip() for line in text.split('\n')]
-        lines = [line for line in lines if line]
-        cleaned_text = '\n\n'.join(lines)
-        
-        return {
-            "type": "article",
-            "content": cleaned_text,
-            "url": url
-        }
-    except Exception as e:
-        return {"type": "error", "message": f"Article parsing error: {str(e)}"}
+        logger.error(f"Error loading config: {str(e)}")
+        return None
 
 def fetch_pocket_articles(consumer_key, access_token, hours_lookback=24):
-    """Fetch articles from Pocket API and process them."""
-    logging.basicConfig(level=logging.INFO)
+    """Fetch articles from Pocket API.
+    
+    Args:
+        consumer_key: Pocket API consumer key
+        access_token: Pocket API access token
+        hours_lookback: Number of hours to look back for articles
+        
+    Returns:
+        List of article dictionaries
+    """
+    logger.info(f"Fetching articles from Pocket (last {hours_lookback} hours)...")
+    
+    # Calculate the unix timestamp for hours_lookback
+    since = int((datetime.now() - timedelta(hours=hours_lookback)).timestamp())
+    
+    # Prepare API request
+    url = "https://getpocket.com/v3/get"
+    headers = {"Content-Type": "application/json; charset=UTF-8", "X-Accept": "application/json"}
+    data = {
+        "consumer_key": consumer_key,
+        "access_token": access_token,
+        "state": "all",  # all, unread, archive
+        "sort": "newest",  # newest, oldest, title, site
+        "detailType": "complete",  # simple, complete
+        "since": since
+    }
     
     try:
-        # Initialize Pocket API
-        p = Pocket(
-            consumer_key=consumer_key,
-            access_token=access_token
-        )
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()  # Raise exception for 4XX/5XX status codes
         
-        # Calculate timestamp for the lookback period
-        lookback_time = int((datetime.now() - timedelta(hours=hours_lookback)).timestamp())
+        result = response.json()
         
-        # Fetch recent articles
-        response = p.get(state='all', since=lookback_time)
+        # Check if we have any items
+        if "list" not in result or not result["list"]:
+            logger.info("No articles found in Pocket for the given time range.")
+            return []
         
-        # Process the articles into the format you need
+        # Process the items into a more usable format
         articles = []
-        
-        if response and response[0] and 'list' in response[0]:
-            for item_id, item in response[0]['list'].items():
-                # Extract tags as a list
-                tags_list = []
-                if 'tags' in item and item['tags']:
-                    tags_list = list(item['tags'].keys())
-                
-                url = item.get('resolved_url', '')
-                
-                # Get content details based on URL type
-                content_details = get_full_content(url)
-                
-                # Create article object with appropriate structure
-                article = {
-                    'title': item.get('resolved_title', 'No title'),
-                    'excerpt': item.get('excerpt', ''),
-                    'content': content_details,
-                    'tags': tags_list,
-                    'url': url,
-                    'time_added': datetime.fromtimestamp(int(item.get('time_added', 0))).strftime('%Y-%m-%d %H:%M:%S')
+        for item_id, item in result["list"].items():
+            # Basic article info
+            article = {
+                "item_id": item_id,
+                "title": item.get("resolved_title") or item.get("given_title") or "Untitled",
+                "url": item.get("resolved_url") or item.get("given_url"),
+                "excerpt": item.get("excerpt", ""),
+                "time_added": datetime.fromtimestamp(int(item.get("time_added", 0))).strftime('%Y-%m-%d %H:%M:%S'),
+                "time_updated": datetime.fromtimestamp(int(item.get("time_updated", 0))).strftime('%Y-%m-%d %H:%M:%S'),
+                "word_count": item.get("word_count", 0),
+                "tags": list(item.get("tags", {}).keys())
+            }
+            
+            # Add content info based on type
+            content = {}
+            if item.get("has_video") == "2" and item.get("videos"):
+                # YouTube content
+                for vid in item.get("videos", {}).values():
+                    if vid.get("src").lower().find("youtube") >= 0:
+                        content = {
+                            "type": "youtube",
+                            "video_id": vid.get("vid")
+                        }
+                        break
+            elif item.get("has_image") == "1" and item.get("images"):
+                # Image content
+                content = {
+                    "type": "image",
+                    "image_url": next(iter(item.get("images", {}).values()), {}).get("src", "")
                 }
-                
-                articles.append(article)
+            else:
+                # Article content
+                content = {
+                    "type": "article",
+                    "content": item.get("excerpt", "")
+                }
+            
+            article["content"] = content
+            articles.append(article)
         
-        # Output the results
-        print(f"Found {len(articles)} items from the last {hours_lookback} hour(s)")
-        
+        logger.info(f"Found {len(articles)} articles in Pocket")
         return articles
         
-    except PocketException as e:
-        print(f"Pocket API Error: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching from Pocket API: {str(e)}")
         return []
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
+        logger.error(f"Error processing Pocket data: {str(e)}")
         return []
 
-if __name__ == "__main__":
-    # Example usage when run directly
-    import argparse
+def save_articles_to_json(articles, output_folder="pocket_articles"):
+    """Save articles to a JSON file with timestamp.
     
-    parser = argparse.ArgumentParser(description='Fetch articles from Pocket API')
-    parser.add_argument('--key', required=True, help='Pocket Consumer Key')
-    parser.add_argument('--token', required=True, help='Pocket Access Token')
-    parser.add_argument('--hours', type=int, default=24, help='Hours to look back')
+    Args:
+        articles: List of article dictionaries
+        output_folder: Folder to save JSON file in
+        
+    Returns:
+        Path to the saved JSON file
+    """
+    if not articles:
+        logger.warning("No articles to save.")
+        return None
     
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"pocket_articles_{timestamp}.json"
+    filepath = os.path.join(output_folder, filename)
+    
+    # Save articles to file
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(articles, f, ensure_ascii=False, indent=2)
+        logger.info(f"Saved {len(articles)} articles to {filepath}")
+        return filepath
+    except Exception as e:
+        logger.error(f"Error saving articles to file: {str(e)}")
+        return None
+
+def main():
+    """Main function to fetch articles from Pocket."""
+    parser = argparse.ArgumentParser(description="Fetch articles from Pocket")
+    parser.add_argument("--config", default="pipeline_config.json", help="Path to config file")
+    parser.add_argument("--hours", type=int, help="Hours to look back for articles")
+    parser.add_argument("--save-to-file", action="store_true", help="Save articles to JSON file")
+    parser.add_argument("--run-evernote", action="store_true", help="Directly run Evernote posting after fetching")
     args = parser.parse_args()
     
-    articles = fetch_pocket_articles(args.key, args.token, args.hours)
+    # Load configuration
+    config = load_config(args.config)
+    if not config:
+        logger.error("Failed to load configuration. Exiting.")
+        sys.exit(1)
     
-    # Convert to JSON and print
-    json_output = json.dumps(articles, indent=2, ensure_ascii=False)
-    print(json_output)
+    # Get Pocket configuration
+    pocket_config = config.get("pocket", {})
     
-    # Save to a file
-    with open('pocket_articles.json', 'w', encoding='utf-8') as f:
-        f.write(json_output)
+    # Override hours_lookback if specified in command line
+    hours_lookback = args.hours if args.hours is not None else pocket_config.get("hours_lookback", 24)
+    
+    # Fetch articles from Pocket
+    articles = fetch_pocket_articles(
+        consumer_key=pocket_config.get("consumer_key"),
+        access_token=pocket_config.get("access_token"),
+        hours_lookback=hours_lookback
+    )
+    
+    if not articles:
+        logger.warning("No articles found to process.")
+        sys.exit(0)
+    
+    # Save to JSON file if requested
+    json_file = None
+    if args.save_to_file or config.get("output", {}).get("save_json", False):
+        json_folder = config.get("output", {}).get("json_folder", "pocket_articles")
+        json_file = save_articles_to_json(articles, json_folder)
+    
+    # Run Evernote posting if requested
+    if args.run_evernote:
+        # Import evernote_poster only when needed
+        try:
+            from evernote_poster import post_to_evernote
+            logger.info("Directly posting articles to Evernote...")
+            success = post_to_evernote(articles, config_path=args.config)
+            if success:
+                logger.info("Evernote posting completed successfully.")
+            else:
+                logger.error("Evernote posting encountered errors.")
+                sys.exit(1)
+        except ImportError:
+            logger.error("Failed to import evernote_poster module. Make sure it's in the same directory.")
+            sys.exit(1)
+    
+    logger.info("Pocket article fetching completed.")
+
+if __name__ == "__main__":
+    main()

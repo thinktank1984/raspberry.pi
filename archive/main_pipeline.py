@@ -10,7 +10,7 @@ from get_pocket import fetch_pocket_articles
 
 # Optional import for Evernote functionality
 try:
-    from pocket_to_evernote import sync_pocket_to_evernote
+    from archive.pocket_to_evernote import sync_pocket_to_evernote
     EVERNOTE_AVAILABLE = True
 except ImportError:
     EVERNOTE_AVAILABLE = False
