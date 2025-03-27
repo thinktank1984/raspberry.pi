@@ -13,3 +13,4 @@ lxml==4.9.3
 evernote3
 oauth2
 distutils
+flask
