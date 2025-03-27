@@ -11,6 +11,11 @@ This project allows you to fetch articles from your Pocket account and optionall
 - Preserves tags from Pocket
 - Avoids creating duplicate notes
 - Configurable time window for article retrieval
+- **Improved web scraping with:**
+  - Robust error handling for website access issues
+  - Automatic retries with exponential backoff
+  - SSL certificate verification bypass when necessary
+  - Playwright integration for JavaScript-rendered websites
 
 ## Installation
 
@@ -23,6 +28,16 @@ This project allows you to fetch articles from your Pocket account and optionall
 2. Install the required dependencies:
    ```
    pip install -r requirements.txt
+   ```
+   
+3. For better scraping of JavaScript-heavy websites, install Playwright:
+   ```
+   python get_pocket.py --install-playwright
+   ```
+   Or manually:
+   ```
+   pip install playwright
+   playwright install chromium
    ```
 
 ## Configuration
@@ -79,6 +94,8 @@ Available options:
 - `--hours`: Number of hours to look back for articles
 - `--evernote`: Enable or disable Evernote sync (True/False)
 - `--config`: Path to a custom config file
+- `--save-to-file`: Save the fetched articles to a JSON file
+- `--install-playwright`: Install Playwright for improved scraping of JavaScript-heavy sites
 
 ### Running Individual Components
 
@@ -110,7 +127,16 @@ You can also run the components separately:
 
 ## Troubleshooting
 
+### Evernote API Rate Limits
 If you encounter rate limits with the Evernote API, the script will automatically pause and retry. However, if you're syncing a large number of articles, you might want to increase the delay between note creations.
+
+### Web Scraping Issues
+If you experience problems with web scraping:
+
+1. **SSL Certificate Errors**: The script will automatically retry and attempt to bypass SSL verification when needed
+2. **Empty Content from JavaScript-heavy Sites**: Install Playwright with `--install-playwright` flag to improve scraping
+3. **Sites Blocking Scrapers**: The script uses realistic browser headers to avoid being blocked
+4. **Timeouts**: Connection timeouts will trigger automatic retries with increasing delays
 
 ## License
 
