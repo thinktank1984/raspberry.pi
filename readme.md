@@ -25,19 +25,24 @@ This project allows you to fetch articles from your Pocket account and optionall
    cd pocket-evernote-pipeline
    ```
 
-2. Install the required dependencies:
+2. Install all required dependencies (including Playwright for JavaScript-rendered sites):
    ```
-   pip install -r requirements.txt
+   # On Windows:
+   python setup.py
+   
+   # On Linux/macOS:
+   python3 setup.py
    ```
    
-3. For better scraping of JavaScript-heavy websites, install Playwright:
+   This will:
+   - Install all Python dependencies
+   - Install Playwright
+   - Install the Chromium browser for JavaScript rendering
+   
+   You can also install manually if needed:
    ```
-   python get_pocket.py --install-playwright
-   ```
-   Or manually:
-   ```
-   pip install playwright
-   playwright install chromium
+   pip install -r requirements.txt
+   python -m playwright install chromium
    ```
 
 ## Configuration

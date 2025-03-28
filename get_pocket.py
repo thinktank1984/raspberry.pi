@@ -10,17 +10,14 @@ import asyncio
 from datetime import datetime, timedelta
 import requests
 from requests.exceptions import RequestException, SSLError, ConnectionError, Timeout
-import bs4
-from bs4 import BeautifulSoup
 
-# Lazy import of playwright to avoid startup overhead if not needed
-playwright_available = False
+# Import scraping module (will be lazy-loaded when needed)
 try:
-    from playwright.sync_api import sync_playwright
-    playwright_available = True
+    from scrap_site import scrape_website
+    scraping_available = True
 except ImportError:
-    logging.warning("Playwright not installed. JavaScript-rendered sites will not be properly scraped.")
-    logging.warning("Install with: pip install playwright pyee greenlet typing-extensions websockets && playwright install chromium")
+    logging.warning("scrap_site module not found. Web scraping will not function properly.")
+    scraping_available = False
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -184,7 +181,8 @@ def fetch_pocket_articles(consumer_key, access_token, hours_lookback=24):
     return []
 
 def fetch_with_retry(url, max_retries=3, backoff_factor=0.5):
-    """Fetches a URL with retry logic.
+    """Fetches a URL with retry logic using requests.
+    Only used for API calls that don't require full browser rendering.
     
     Args:
         url: The URL to fetch
@@ -255,8 +253,8 @@ def fetch_with_retry(url, max_retries=3, backoff_factor=0.5):
     
     return None
 
-def scrape_with_playwright(url, timeout=30000):
-    """Scrape content from a JavaScript-rendered page using Playwright.
+def scrape_article_content(url, timeout=30000):
+    """Scrape content from a web page.
     
     Args:
         url: The URL to scrape
@@ -265,162 +263,15 @@ def scrape_with_playwright(url, timeout=30000):
     Returns:
         String with article content or None if scraping failed
     """
-    if not playwright_available:
-        logger.warning("Playwright not available. Cannot scrape JavaScript-rendered site.")
-        return None
-        
-    logger.info(f"Using Playwright to scrape JavaScript-rendered site: {url}")
-    
-    try:
-        with sync_playwright() as p:
-            # Launch browser in headless mode
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            )
-            
-            # Open new page with timeout
-            page = context.new_page()
-            page.set_default_timeout(timeout)
-            
-            # Navigate to the URL and wait for network to be idle
-            page.goto(url, wait_until="networkidle")
-            
-            # Wait additional time for JavaScript to render
-            page.wait_for_timeout(1000)
-            
-            # Extract content using the same selectors as in regular scraping
-            content = None
-            selectors = [
-                "article", "main", ".article", ".post", ".content", "#content", 
-                ".article-content", ".post-content", "[itemprop='articleBody']",
-                ".entry-content", ".main-content", ".post-body", "#article-body"
-            ]
-            
-            # Try each selector
-            for selector in selectors:
-                try:
-                    # Check if selector exists
-                    if page.query_selector(selector):
-                        # Get text content from the selector
-                        content = page.eval_on_selector(
-                            selector,
-                            "el => el.innerText"
-                        )
-                        if content and len(content) > 200:  # Only accept if substantial content
-                            break
-                except Exception:
-                    continue
-            
-            # If no content found with selectors, get entire body text
-            if not content:
-                content = page.eval_on_selector("body", "el => el.innerText")
-            
-            # Close browser
-            browser.close()
-            
-            # Clean the content
-            if content:
-                content = ' '.join(content.split())  # Normalize whitespace
-                
-                # Limit content length
-                max_length = 5000
-                if len(content) > max_length:
-                    content = content[:max_length] + "... (content truncated)"
-                
-                logger.info(f"Successfully scraped {len(content)} characters with Playwright")
-                return content
-            else:
-                logger.warning(f"No content found on page with Playwright: {url}")
-                return None
-                
-    except Exception as e:
-        logger.error(f"Playwright error scraping {url}: {str(e)}")
-        return None
-
-def scrape_article_content(url):
-    """Attempt to scrape content from an article URL.
-    
-    Args:
-        url: The URL to scrape
-        
-    Returns:
-        String with article content or None if scraping failed
-    """
     if not url:
         return None
         
-    logger.info(f"Scraping content from URL: {url}")
+    if not scraping_available:
+        logger.error("Scraping module not available. Cannot scrape web content.")
+        return None
     
-    try:
-        # Use retry logic to fetch the URL
-        response = fetch_with_retry(url)
-        if not response:
-            logger.error(f"Failed to fetch content from {url} after retries")
-            return None
-        
-        # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Remove script and style elements
-        for script in soup(["script", "style", "iframe", "nav", "footer", "header"]):
-            script.extract()
-            
-        # Look for main content
-        # Try common content container identifiers
-        content_candidates = []
-        
-        # Try to find article or main content by common selectors
-        selectors = [
-            "article", "main", ".article", ".post", ".content", "#content", 
-            ".article-content", ".post-content", "[itemprop='articleBody']",
-            ".entry-content", ".main-content", ".post-body", "#article-body"
-        ]
-        
-        for selector in selectors:
-            elements = soup.select(selector)
-            if elements:
-                content_candidates.extend(elements)
-                
-        # If we found potential content elements, use the largest one
-        if content_candidates:
-            # Sort by content length (descending)
-            content_candidates.sort(key=lambda x: len(x.get_text()), reverse=True)
-            content = content_candidates[0].get_text(separator=' ', strip=True)
-        else:
-            # Fallback to body if no article containers found
-            content = soup.body.get_text(separator=' ', strip=True)
-            
-        # Clean the content
-        content = ' '.join(content.split())  # Normalize whitespace
-        
-        # Check if we might need JavaScript rendering (content too short, likely SPA)
-        if (len(content) < 200 or 
-            "javascript" in response.text.lower() and
-            any(js_framework in response.text.lower() for js_framework in 
-                ["react", "vue", "angular", "ember", "backbone", "svelte"])):
-            
-            logger.info(f"Regular scraping found minimal content ({len(content)} chars). Trying Playwright.")
-            # Try with Playwright for JavaScript-rendered content
-            playwright_content = scrape_with_playwright(url)
-            if playwright_content and len(playwright_content) > len(content) * 1.5:  # At least 50% more content
-                logger.info(f"Playwright found better content ({len(playwright_content)} chars vs {len(content)} chars).")
-                content = playwright_content
-        
-        # Limit content length to avoid excessively large content
-        max_length = 5000
-        if len(content) > max_length:
-            content = content[:max_length] + "... (content truncated)"
-            
-        logger.info(f"Successfully scraped {len(content)} characters of content")
-        return content
-        
-    except Exception as e:
-        logger.error(f"Error with regular scraping for {url}: {str(e)}")
-        # If regular scraping fails, try Playwright as fallback
-        logger.info(f"Trying Playwright as fallback for {url}")
-        return scrape_with_playwright(url)
+    # Use the dedicated scraping module
+    return scrape_website(url, timeout=timeout)
 
 
 def save_articles_to_json(articles, output_folder="pocket_articles"):

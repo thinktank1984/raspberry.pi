@@ -1,7 +1,7 @@
 # Claude Assistant Guidelines for Raspberry Pi Pocket-Evernote Pipeline
 
 ## Build/Run Commands
-- Install: `pip install -r requirements.txt`
+- Install all dependencies (including Playwright): `python setup.py` or `python3 setup.py`
 - Run pipeline: `python pipeline_runner.py`
 - Run Pocket fetcher: `python get_pocket.py --hours 24 --save-to-file`
 - Run Evernote poster: `python evernote_poster.py`
